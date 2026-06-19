@@ -29,8 +29,8 @@
 static const char *TAG = "app";
 #define MOUNT_POINT "/sdcard"
 
-#if CONFIG_UKNOMI_VAD_AFE
-#define VAD_NAME "esp_sr_afe"
+#if CONFIG_UKNOMI_VAD_ESPSR
+#define VAD_NAME "esp_sr_vad"
 #else
 #define VAD_NAME "energy"
 #endif
@@ -126,8 +126,8 @@ static void on_segment(const int16_t *samples, int n, int64_t start_ms, int64_t 
 
 // ---- audio task -------------------------------------------------------------
 static void audio_task(void *arg) {
-    vad_t *vad = (vad_t *)arg;
-    int fs = vad_frame_samples(vad);
+    uknomi_vad_t *vad = (uknomi_vad_t *)arg;
+    int fs = uknomi_vad_frame_samples(vad);
     int16_t *frame = malloc(fs * sizeof(int16_t));
     int16_t *clean = malloc(fs * sizeof(int16_t));
     segmenter_t *seg = segmenter_create(CONFIG_UKNOMI_SAMPLE_RATE, fs, s_cfg.preroll_ms,
@@ -142,7 +142,7 @@ static void audio_task(void *arg) {
     for (;;) {
         int got = audio_capture_read(frame, fs);
         if (got != fs) continue;
-        bool speech = vad_process(vad, frame, clean, fs);
+        bool speech = uknomi_vad_process(vad, frame, clean, fs);
         segmenter_push(seg, clean, fs, speech, netclock_now_ms());
     }
 }
@@ -168,7 +168,7 @@ void app_main(void) {
 
     ESP_ERROR_CHECK(audio_capture_init(CONFIG_UKNOMI_SAMPLE_RATE,
                                        CONFIG_UKNOMI_PDM_CLK_GPIO, CONFIG_UKNOMI_PDM_DIN_GPIO));
-    vad_t *vad = vad_create(CONFIG_UKNOMI_SAMPLE_RATE, s_cfg.vad_threshold);
+    uknomi_vad_t *vad = uknomi_vad_create(CONFIG_UKNOMI_SAMPLE_RATE, s_cfg.vad_threshold);
     if (!vad) {
         ESP_LOGE(TAG, "VAD init failed");
         return;

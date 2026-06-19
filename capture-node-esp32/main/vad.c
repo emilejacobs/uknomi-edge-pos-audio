@@ -4,49 +4,53 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
 
 static const char *TAG = "vad";
 
-#if CONFIG_UKNOMI_VAD_AFE
-#include "esp_afe_sr_iface.h"
-#include "esp_afe_sr_models.h"
+#if CONFIG_UKNOMI_VAD_ESPSR
+#include "esp_vad.h"  // ESP-SR's WebRTC-based VAD (vad_create/vad_process/vad_destroy)
+#define VAD_FRAME_MS 30  // WebRTC VAD requires 10/20/30 ms frames
 #endif
 
-struct vad_t {
+struct uknomi_vad {
     int frame_samples;
+    int sample_rate;
     float threshold;
-#if CONFIG_UKNOMI_VAD_AFE
-    esp_afe_sr_iface_t *afe;
-    esp_afe_sr_data_t *afe_data;
+#if CONFIG_UKNOMI_VAD_ESPSR
+    vad_handle_t handle;
 #endif
 };
 
-vad_t *vad_create(int sample_rate, float threshold) {
-    vad_t *v = calloc(1, sizeof(vad_t));
+#if CONFIG_UKNOMI_VAD_ESPSR
+// Map a 0..1 threshold knob onto ESP-SR aggressiveness modes VAD_MODE_0..4
+// (higher = more aggressive about rejecting non-speech).
+static vad_mode_t map_mode(float threshold) {
+    int m = (int)lroundf(threshold * 4.0f);
+    if (m < 0) m = 0;
+    if (m > 4) m = 4;
+    return (vad_mode_t)m;
+}
+#endif
+
+uknomi_vad_t *uknomi_vad_create(int sample_rate, float threshold) {
+    uknomi_vad_t *v = calloc(1, sizeof(uknomi_vad_t));
     if (!v) return NULL;
+    v->sample_rate = sample_rate;
     v->threshold = threshold;
 
-#if CONFIG_UKNOMI_VAD_AFE
-    // ESP-SR AFE: single mic ("M"), noise suppression + VAD, no AEC/wakenet.
-    // NOTE: the esp-sr AFE config/result API has shifted across versions — this
-    // targets the afe_config_init() interface (esp-sr v2.x). Validate the exact
-    // symbol/enum names against the pinned component version on first device build.
-    afe_config_t *cfg = afe_config_init("M", NULL, AFE_TYPE_SR, AFE_MODE_LOW_COST);
-    cfg->aec_init = false;
-    cfg->se_init = true;   // noise suppression — partially offsets the omni mic
-    cfg->vad_init = true;
-    cfg->vad_mode = VAD_MODE_3;
-    cfg->wakenet_init = false;
-    v->afe = esp_afe_handle_from_config(cfg);
-    v->afe_data = v->afe->create_from_config(cfg);
-    v->frame_samples = v->afe->get_feed_chunksize(v->afe_data);
-    afe_config_free(cfg);
-    ESP_LOGI(TAG, "ESP-SR AFE VAD: feed=%d samples", v->frame_samples);
+#if CONFIG_UKNOMI_VAD_ESPSR
+    v->frame_samples = sample_rate / 1000 * VAD_FRAME_MS;  // 480 @ 16 kHz
+    v->handle = vad_create(map_mode(threshold));
+    if (!v->handle) {
+        ESP_LOGE(TAG, "vad_create failed");
+        free(v);
+        return NULL;
+    }
+    ESP_LOGI(TAG, "ESP-SR VAD: mode=%d frame=%d samples (%d ms)",
+             (int)map_mode(threshold), v->frame_samples, VAD_FRAME_MS);
 #else
-    (void)sample_rate;
     v->frame_samples = sample_rate / 50;  // 20 ms frames
     ESP_LOGI(TAG, "energy VAD: frame=%d samples, rms threshold=%.3f",
              v->frame_samples, v->threshold);
@@ -54,39 +58,29 @@ vad_t *vad_create(int sample_rate, float threshold) {
     return v;
 }
 
-int vad_frame_samples(const vad_t *v) { return v->frame_samples; }
+int uknomi_vad_frame_samples(const uknomi_vad_t *v) { return v->frame_samples; }
 
-bool vad_process(vad_t *v, const int16_t *in, int16_t *out, int n) {
-#if CONFIG_UKNOMI_VAD_AFE
-    v->afe->feed(v->afe_data, in);
-    afe_fetch_result_t *r = v->afe->fetch(v->afe_data);
-    bool speech = false;
-    if (r && r->ret_value != ESP_FAIL) {
-        speech = (r->vad_state == VAD_SPEECH);
-        if (out && r->data) {
-            int copy = (r->data_size / (int)sizeof(int16_t));
-            if (copy > n) copy = n;
-            memcpy(out, r->data, copy * sizeof(int16_t));
-        }
-    }
-    return speech;
+bool uknomi_vad_process(uknomi_vad_t *v, const int16_t *in, int16_t *out, int n) {
+    if (out && out != in) memcpy(out, in, n * sizeof(int16_t));
+#if CONFIG_UKNOMI_VAD_ESPSR
+    // esp_vad has no noise suppression, so the recorded samples are the raw input
+    // (already copied to `out` above). Returns VAD_SILENCE / VAD_SPEECH.
+    vad_state_t st = vad_process(v->handle, (int16_t *)in, v->sample_rate, VAD_FRAME_MS);
+    return st == VAD_SPEECH;
 #else
-    // RMS energy in [0,1] vs threshold (interpreted as an RMS cutoff, ~0.02).
     double sum = 0.0;
     for (int i = 0; i < n; i++) {
         double s = (double)in[i] / 32768.0;
         sum += s * s;
     }
-    double rms = sqrt(sum / n);
-    if (out && out != in) memcpy(out, in, n * sizeof(int16_t));
-    return rms > v->threshold;
+    return sqrt(sum / n) > v->threshold;
 #endif
 }
 
-void vad_destroy(vad_t *v) {
+void uknomi_vad_destroy(uknomi_vad_t *v) {
     if (!v) return;
-#if CONFIG_UKNOMI_VAD_AFE
-    if (v->afe && v->afe_data) v->afe->destroy(v->afe_data);
+#if CONFIG_UKNOMI_VAD_ESPSR
+    if (v->handle) vad_destroy(v->handle);
 #endif
     free(v);
 }

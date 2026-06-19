@@ -5,7 +5,7 @@ utterance to the Mac aggregator over MQTT. See [docs/ARCHITECTURE.md](../docs/AR
 for the wire contract this firmware implements.
 
 ```
-I2S PDM mic ─▶ VAD (ESP-SR AFE) ─▶ segmenter (pre-roll + hangover)
+I2S PDM mic ─▶ VAD (ESP-SR esp_vad) ─▶ segmenter (pre-roll + hangover)
             ─▶ PCM16 envelope ─▶ MQTT publish ─▶ (SD spool on outage)
 ```
 
@@ -37,23 +37,24 @@ starts capturing. If the broker is unreachable, utterances spool to
 
 ## Configuration knobs (`idf.py menuconfig` → "uKnomi Capture Node")
 
-- **VAD engine** — `ESP-SR AFE` (default; noise suppression + VAD) or an
-  `energy threshold` fallback for bring-up / A/B.
+- **VAD engine** — `ESP-SR VAD` (default; `esp_vad.h`, WebRTC-based, aggressiveness
+  mapped from the config `vad.threshold`) or an `energy threshold` fallback for
+  bring-up / A/B.
 - **PDM mic pins** — default CLK=42, DIN=41 (XIAO Sense).
 - **microSD SPI pins** — default SCK=7, MISO=8, MOSI=9, CS=21 (XIAO Sense).
 - **Sample rate**, **max utterance length**.
 
-## ⚠️ Needs on-device validation
+## Build status & on-device validation
 
-This firmware targets the documented ESP-IDF v5 and ESP-SR v2 APIs but has **not
-been compiled or run on hardware in this commit**. Most likely to need tweaks:
+The firmware **compiles cleanly** against ESP-IDF v5.2 + ESP-SR 2.4.6 (verified in
+the `espressif/idf:release-v5.2` container; CI builds the same way). It has **not
+yet been run on a physical board** — still to confirm on hardware:
 
-- **ESP-SR AFE integration** (`vad.c`): the `afe_config_*` / `afe_fetch_result_t`
-  symbols and VAD-state enum names have shifted across esp-sr versions. If the
-  AFE build fails, switch to the energy VAD (`menuconfig`) to bring the rest of
-  the pipeline up, then reconcile the AFE API against your pinned component.
-- **Board pin assignments** — confirm the PDM and SD pins against your Sense
-  revision (defaults above are the common Seeed values).
+- **Board pin assignments** — verify the PDM mic (CLK=42, DIN=41) and microSD SPI
+  pins (SCK=7, MISO=8, MOSI=9, CS=21) against your Sense revision via `menuconfig`.
+- **VAD tuning** — `esp_vad` has no noise suppression; tune `vad.threshold`
+  (→ aggressiveness mode) on the real counter. If you later need denoising, the
+  heavier ESP-SR **AFE** is the upgrade path (a separate engine, not wired here).
 
 The known v1 limitation stands: the onboard mic is **omnidirectional**, so
 adjacent-register crosstalk will be worse than a directional setup — fine for

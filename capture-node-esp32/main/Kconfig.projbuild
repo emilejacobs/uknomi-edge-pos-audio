@@ -26,12 +26,13 @@ menu "uKnomi Capture Node"
 
     choice UKNOMI_VAD_ENGINE
         prompt "VAD engine"
-        default UKNOMI_VAD_AFE
+        default UKNOMI_VAD_ESPSR
         help
-            ESP-SR AFE is the intended production VAD (noise suppression + VAD).
-            The energy fallback is a dependency-light A/B option for bring-up.
-        config UKNOMI_VAD_AFE
-            bool "ESP-SR AFE VAD"
+            ESP-SR is the intended production VAD (esp_vad.h, WebRTC-based, with
+            selectable aggressiveness). The energy fallback is a dependency-light
+            A/B option for bring-up.
+        config UKNOMI_VAD_ESPSR
+            bool "ESP-SR VAD"
         config UKNOMI_VAD_ENERGY
             bool "Energy threshold VAD (fallback)"
     endchoice

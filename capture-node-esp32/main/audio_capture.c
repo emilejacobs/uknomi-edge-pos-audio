@@ -4,6 +4,8 @@
 
 #include "driver/i2s_pdm.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char *TAG = "audio";
 static i2s_chan_handle_t s_rx = NULL;
