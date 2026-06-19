@@ -1,0 +1,47 @@
+menu "uKnomi Capture Node"
+
+    menu "ReSpeaker / PDM microphone (XIAO ESP32-S3 Sense)"
+        config UKNOMI_PDM_CLK_GPIO
+            int "PDM mic clock GPIO"
+            default 42
+        config UKNOMI_PDM_DIN_GPIO
+            int "PDM mic data GPIO"
+            default 41
+    endmenu
+
+    menu "microSD (SPI, Sense expansion board)"
+        config UKNOMI_SD_SCK_GPIO
+            int "SD SCK GPIO"
+            default 7
+        config UKNOMI_SD_MISO_GPIO
+            int "SD MISO GPIO"
+            default 8
+        config UKNOMI_SD_MOSI_GPIO
+            int "SD MOSI GPIO"
+            default 9
+        config UKNOMI_SD_CS_GPIO
+            int "SD CS GPIO"
+            default 21
+    endmenu
+
+    choice UKNOMI_VAD_ENGINE
+        prompt "VAD engine"
+        default UKNOMI_VAD_AFE
+        help
+            ESP-SR AFE is the intended production VAD (noise suppression + VAD).
+            The energy fallback is a dependency-light A/B option for bring-up.
+        config UKNOMI_VAD_AFE
+            bool "ESP-SR AFE VAD"
+        config UKNOMI_VAD_ENERGY
+            bool "Energy threshold VAD (fallback)"
+    endchoice
+
+    config UKNOMI_SAMPLE_RATE
+        int "Capture sample rate (Hz)"
+        default 16000
+
+    config UKNOMI_MAX_UTTERANCE_MS
+        int "Max utterance length (ms) before forced cut"
+        default 20000
+
+endmenu

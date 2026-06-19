@@ -1,0 +1,24 @@
+idf_component_register(
+    SRCS
+        "app_main.c"
+        "config_sd.c"
+        "netclock.c"
+        "audio_capture.c"
+        "vad.c"
+        "segmenter.c"
+        "envelope.c"
+        "spool.c"
+        "publisher.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        driver
+        esp_wifi
+        esp_netif
+        esp_event
+        nvs_flash
+        mqtt
+        json
+        fatfs
+        sdmmc
+        esp-sr
+)
