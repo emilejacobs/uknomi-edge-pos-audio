@@ -50,11 +50,14 @@ class TranscribeConfig:
 
 @dataclass
 class OrderSplitConfig:
-    provider: str = "anthropic"
+    provider: str = "anthropic"  # "anthropic" | "openai-compatible"
     model: str = "claude-opus-4-8"
-    effort: str = "medium"  # low | medium | high | max
+    effort: str = "medium"  # low | medium | high | max (anthropic only)
     max_chunk_chars: int = 8000
     overlap_chars: int = 600
+    # openai-compatible only (LM Studio / Ollama / vLLM / OpenAI):
+    base_url: str | None = None  # e.g. "http://localhost:1234/v1"
+    api_key: str | None = None  # any string for LM Studio; env OPENAI_API_KEY also works
 
 
 @dataclass

@@ -22,11 +22,16 @@ language = "en"
 # whisper_cpp_bin = "/opt/uknomi/whisper/main"   # required when engine = "whisper-cpp"
 
 [ordersplit]
-provider = "anthropic"
+provider = "anthropic"          # "anthropic" | "openai-compatible"
 model = "claude-opus-4-8"       # set "claude-sonnet-4-6" for cheaper high-volume runs
-effort = "medium"               # low | medium | high | max
+effort = "medium"               # low | medium | high | max (anthropic only)
 max_chunk_chars = 8000
 overlap_chars = 600
+# --- local / OpenAI-compatible inference (LM Studio, Ollama, vLLM, OpenAI) ---
+# provider = "openai-compatible"
+# base_url = "http://localhost:1234/v1"   # LM Studio default
+# model = "qwen2.5-7b-instruct"           # the model id loaded in LM Studio
+# api_key = "lm-studio"                    # any string for LM Studio
 
 [s3]
 enabled = false

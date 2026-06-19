@@ -19,6 +19,9 @@ dependencies = [
 #   pip install -e '.[whisper]'
 # (whisper.cpp is supported via config without this extra — see transcribe.py).
 whisper = ["faster-whisper>=1.0"]
+# OpenAI-compatible order-split provider (LM Studio, Ollama, vLLM, OpenAI, ...).
+# Only needed when [ordersplit].provider = "openai-compatible".
+openai = ["openai>=1.30"]
 # Test/replay tooling (fake_feeder needs soundfile+numpy to read WAVs).
 dev = [
     "pytest>=8.0",
