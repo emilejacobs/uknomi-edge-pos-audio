@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local config / secrets (never commit real creds)
+*.local.json
+*.local.toml
+.env
+aggregator/aggregator.toml
+capture-node-esp32/config.json
+
+# ESP-IDF build artifacts
+capture-node-esp32/build/
+capture-node-esp32/sdkconfig
+capture-node-esp32/sdkconfig.old
+capture-node-esp32/managed_components/
+capture-node-esp32/dependencies.lock
+
+# Runtime data (captured audio + transcripts during validation)
+data/
+spool/
+*.wav
+*.flac
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
