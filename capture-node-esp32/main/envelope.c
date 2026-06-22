@@ -8,8 +8,8 @@
 uint8_t *envelope_build(const char *store, const char *reg, uint32_t seq,
                         const char *start_utc, const char *end_utc,
                         int sample_rate, const char *codec, const char *vad,
-                        bool retain_audio, const int16_t *pcm, int n_samples,
-                        size_t *out_len) {
+                        bool retain_audio, int presence,
+                        const int16_t *pcm, int n_samples, size_t *out_len) {
     cJSON *h = cJSON_CreateObject();
     if (!h) return NULL;
     cJSON_AddStringToObject(h, "schema", UKNOMI_SCHEMA);
@@ -22,6 +22,7 @@ uint8_t *envelope_build(const char *store, const char *reg, uint32_t seq,
     cJSON_AddStringToObject(h, "codec", codec);
     cJSON_AddStringToObject(h, "vad", vad);
     cJSON_AddBoolToObject(h, "retain_audio", retain_audio);
+    if (presence >= 0) cJSON_AddBoolToObject(h, "presence", presence != 0);
 
     char *json = cJSON_PrintUnformatted(h);
     cJSON_Delete(h);

@@ -9,16 +9,22 @@ idf_component_register(
         "envelope.c"
         "spool.c"
         "publisher.c"
+        "camera.c"
+        "presence.c"
+        "webconfig.c"
     INCLUDE_DIRS "."
     REQUIRES
         driver
         esp_wifi
         esp_netif
         esp_event
+        esp_http_server
         nvs_flash
         mqtt
         json
         fatfs
         sdmmc
+        lwip
         esp-sr
+        esp32-camera
 )

@@ -74,10 +74,28 @@ static bool get_bool(const cJSON *obj, const char *key, bool dflt) {
     return dflt;
 }
 
+static void set_defaults(uknomi_config_t *out) {
+    memset(out, 0, sizeof(*out));
+    strcpy(out->store, "store00");
+    strcpy(out->reg, "reg0");
+    out->broker_port = 1883;
+    out->vad_threshold = 0.6f;
+    out->preroll_ms = 400;
+    out->hangover_ms = 700;
+    strcpy(out->codec, "pcm16");
+    out->retain_audio = false;
+    out->spool_max_files = 500;
+    out->presence_enabled = false;
+    out->presence_hold_ms = 30000;
+    out->presence_sensitivity = 8.0f;
+}
+
 esp_err_t uknomi_config_load(const char *path, uknomi_config_t *out) {
+    set_defaults(out);  // always leave a valid struct, even with no/empty card
+
     FILE *f = fopen(path, "rb");
     if (!f) {
-        ESP_LOGE(TAG, "cannot open %s", path);
+        ESP_LOGW(TAG, "%s not found — starting Wi-Fi setup portal", path);
         return ESP_ERR_NOT_FOUND;
     }
     fseek(f, 0, SEEK_END);
@@ -103,38 +121,91 @@ esp_err_t uknomi_config_load(const char *path, uknomi_config_t *out) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    memset(out, 0, sizeof(*out));
     const cJSON *wifi = cJSON_GetObjectItemCaseSensitive(root, "wifi");
-    get_str(wifi, "ssid", out->wifi_ssid, sizeof(out->wifi_ssid), "");
-    get_str(wifi, "password", out->wifi_pass, sizeof(out->wifi_pass), "");
+    get_str(wifi, "ssid", out->wifi_ssid, sizeof(out->wifi_ssid), out->wifi_ssid);
+    get_str(wifi, "password", out->wifi_pass, sizeof(out->wifi_pass), out->wifi_pass);
 
-    get_str(root, "store", out->store, sizeof(out->store), "store00");
-    get_str(root, "register", out->reg, sizeof(out->reg), "reg0");
+    get_str(root, "store", out->store, sizeof(out->store), out->store);
+    get_str(root, "register", out->reg, sizeof(out->reg), out->reg);
 
     const cJSON *broker = cJSON_GetObjectItemCaseSensitive(root, "broker");
-    get_str(broker, "host", out->broker_host, sizeof(out->broker_host), "");
-    out->broker_port = get_int(broker, "port", 1883);
-    get_str(broker, "username", out->broker_user, sizeof(out->broker_user), "");
-    get_str(broker, "password", out->broker_pass, sizeof(out->broker_pass), "");
+    get_str(broker, "host", out->broker_host, sizeof(out->broker_host), out->broker_host);
+    out->broker_port = get_int(broker, "port", out->broker_port);
+    get_str(broker, "username", out->broker_user, sizeof(out->broker_user), out->broker_user);
+    get_str(broker, "password", out->broker_pass, sizeof(out->broker_pass), out->broker_pass);
 
     const cJSON *vad = cJSON_GetObjectItemCaseSensitive(root, "vad");
-    out->vad_threshold = (float)get_num(vad, "threshold", 0.6);
-    out->preroll_ms = get_int(vad, "preroll_ms", 400);
-    out->hangover_ms = get_int(vad, "hangover_ms", 700);
+    out->vad_threshold = (float)get_num(vad, "threshold", out->vad_threshold);
+    out->preroll_ms = get_int(vad, "preroll_ms", out->preroll_ms);
+    out->hangover_ms = get_int(vad, "hangover_ms", out->hangover_ms);
 
-    get_str(root, "codec", out->codec, sizeof(out->codec), "pcm16");
-    out->retain_audio = get_bool(root, "retain_audio", false);
+    get_str(root, "codec", out->codec, sizeof(out->codec), out->codec);
+    out->retain_audio = get_bool(root, "retain_audio", out->retain_audio);
 
     const cJSON *spool = cJSON_GetObjectItemCaseSensitive(root, "spool");
-    out->spool_max_files = get_int(spool, "max_files", 500);
+    out->spool_max_files = get_int(spool, "max_files", out->spool_max_files);
+
+    const cJSON *presence = cJSON_GetObjectItemCaseSensitive(root, "presence");
+    out->presence_enabled = get_bool(presence, "enabled", out->presence_enabled);
+    out->presence_hold_ms = get_int(presence, "hold_ms", out->presence_hold_ms);
+    out->presence_sensitivity = (float)get_num(presence, "sensitivity", out->presence_sensitivity);
 
     cJSON_Delete(root);
+    ESP_LOGI(TAG, "config: store=%s register=%s broker=%s:%d retain_audio=%d presence=%d",
+             out->store, out->reg, out->broker_host, out->broker_port,
+             out->retain_audio, out->presence_enabled);
+    return ESP_OK;
+}
 
-    if (out->wifi_ssid[0] == '\0' || out->broker_host[0] == '\0') {
-        ESP_LOGE(TAG, "config.json missing required wifi.ssid or broker.host");
-        return ESP_ERR_INVALID_ARG;
+bool uknomi_config_is_complete(const uknomi_config_t *cfg) {
+    return cfg->wifi_ssid[0] != '\0' && cfg->broker_host[0] != '\0';
+}
+
+esp_err_t uknomi_config_save(const char *path, const uknomi_config_t *cfg) {
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+
+    cJSON *wifi = cJSON_AddObjectToObject(root, "wifi");
+    cJSON_AddStringToObject(wifi, "ssid", cfg->wifi_ssid);
+    cJSON_AddStringToObject(wifi, "password", cfg->wifi_pass);
+    cJSON_AddStringToObject(root, "store", cfg->store);
+    cJSON_AddStringToObject(root, "register", cfg->reg);
+
+    cJSON *broker = cJSON_AddObjectToObject(root, "broker");
+    cJSON_AddStringToObject(broker, "host", cfg->broker_host);
+    cJSON_AddNumberToObject(broker, "port", cfg->broker_port);
+    cJSON_AddStringToObject(broker, "username", cfg->broker_user);
+    cJSON_AddStringToObject(broker, "password", cfg->broker_pass);
+
+    cJSON *vad = cJSON_AddObjectToObject(root, "vad");
+    cJSON_AddNumberToObject(vad, "threshold", cfg->vad_threshold);
+    cJSON_AddNumberToObject(vad, "preroll_ms", cfg->preroll_ms);
+    cJSON_AddNumberToObject(vad, "hangover_ms", cfg->hangover_ms);
+
+    cJSON_AddStringToObject(root, "codec", cfg->codec);
+    cJSON_AddBoolToObject(root, "retain_audio", cfg->retain_audio);
+
+    cJSON *spool = cJSON_AddObjectToObject(root, "spool");
+    cJSON_AddNumberToObject(spool, "max_files", cfg->spool_max_files);
+
+    cJSON *presence = cJSON_AddObjectToObject(root, "presence");
+    cJSON_AddBoolToObject(presence, "enabled", cfg->presence_enabled);
+    cJSON_AddNumberToObject(presence, "hold_ms", cfg->presence_hold_ms);
+    cJSON_AddNumberToObject(presence, "sensitivity", cfg->presence_sensitivity);
+
+    char *json = cJSON_Print(root);
+    cJSON_Delete(root);
+    if (!json) return ESP_ERR_NO_MEM;
+
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        cJSON_free(json);
+        ESP_LOGE(TAG, "cannot write %s", path);
+        return ESP_FAIL;
     }
-    ESP_LOGI(TAG, "config: store=%s register=%s broker=%s:%d retain_audio=%d",
-             out->store, out->reg, out->broker_host, out->broker_port, out->retain_audio);
+    fwrite(json, 1, strlen(json), f);
+    fclose(f);
+    cJSON_free(json);
+    ESP_LOGI(TAG, "saved config to %s", path);
     return ESP_OK;
 }

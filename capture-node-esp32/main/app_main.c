@@ -13,6 +13,7 @@
 #include "envelope.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
@@ -20,11 +21,13 @@
 #include "freertos/task.h"
 #include "netclock.h"
 #include "nvs_flash.h"
+#include "presence.h"
 #include "publisher.h"
 #include "sdkconfig.h"
 #include "segmenter.h"
 #include "spool.h"
 #include "vad.h"
+#include "webconfig.h"
 
 static const char *TAG = "app";
 #define MOUNT_POINT "/sdcard"
@@ -77,19 +80,21 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
     }
 }
 
-static void wifi_start(const uknomi_config_t *cfg) {
+// One-time Wi-Fi/netif stack init shared by both AP setup and STA modes.
+static void net_init(void) {
     s_wifi_events = xEventGroupCreate();
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
-
     wifi_init_config_t init_cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&init_cfg));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         IP_EVENT, IP_EVENT_STA_GOT_IP, wifi_event_handler, NULL, NULL));
+}
 
+static void wifi_start_sta(const uknomi_config_t *cfg) {
+    esp_netif_create_default_wifi_sta();
     wifi_config_t wifi_config = {0};
     strncpy((char *)wifi_config.sta.ssid, cfg->wifi_ssid, sizeof(wifi_config.sta.ssid) - 1);
     strncpy((char *)wifi_config.sta.password, cfg->wifi_pass, sizeof(wifi_config.sta.password) - 1);
@@ -97,9 +102,25 @@ static void wifi_start(const uknomi_config_t *cfg) {
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
     esp_wifi_connect();
-
     ESP_LOGI(TAG, "connecting to Wi-Fi \"%s\"...", cfg->wifi_ssid);
     xEventGroupWaitBits(s_wifi_events, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
+}
+
+// SoftAP for first-time / reconfig setup. Open AP named uknomi-setup-XXXX.
+static void wifi_start_ap(void) {
+    esp_netif_create_default_wifi_ap();
+    uint8_t mac[6] = {0};
+    esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);
+    wifi_config_t ap = {0};
+    int n = snprintf((char *)ap.ap.ssid, sizeof(ap.ap.ssid), "uknomi-setup-%02X%02X", mac[4], mac[5]);
+    ap.ap.ssid_len = n;
+    ap.ap.channel = 1;
+    ap.ap.max_connection = 4;
+    ap.ap.authmode = WIFI_AUTH_OPEN;
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_LOGW(TAG, "SETUP MODE — join Wi-Fi \"%s\" and open http://192.168.4.1", ap.ap.ssid);
 }
 
 // ---- segment -> envelope -> publish ----------------------------------------
@@ -110,10 +131,13 @@ static void on_segment(const int16_t *samples, int n, int64_t start_ms, int64_t 
     netclock_iso8601(start_ms, start_utc, sizeof(start_utc));
     netclock_iso8601(end_ms, end_utc, sizeof(end_utc));
 
+    int presence = -1;  // omit unless the camera detector is running
+    if (presence_running()) presence = presence_active_during(start_ms, end_ms) ? 1 : 0;
+
     size_t len = 0;
     uint8_t *env = envelope_build(s_cfg.store, s_cfg.reg, seq_next(), start_utc, end_utc,
                                   CONFIG_UKNOMI_SAMPLE_RATE, s_cfg.codec, VAD_NAME,
-                                  s_cfg.retain_audio, samples, n, &len);
+                                  s_cfg.retain_audio, presence, samples, n, &len);
     if (!env) {
         ESP_LOGE(TAG, "envelope build failed (out of memory?)");
         return;
@@ -150,11 +174,22 @@ static void audio_task(void *arg) {
 void app_main(void) {
     ESP_ERROR_CHECK(nvs_flash_init());
 
-    ESP_ERROR_CHECK(uknomi_sd_mount(MOUNT_POINT));
-    ESP_ERROR_CHECK(uknomi_config_load(MOUNT_POINT "/config.json", &s_cfg));
+    if (uknomi_sd_mount(MOUNT_POINT) != ESP_OK) {
+        ESP_LOGE(TAG, "no SD card — setup portal will load but cannot save config");
+    }
+    uknomi_config_load(MOUNT_POINT "/config.json", &s_cfg);  // always fills defaults
+    net_init();
+
+    // First-time / incomplete config -> Wi-Fi setup portal, then wait for save+reboot.
+    if (!uknomi_config_is_complete(&s_cfg)) {
+        wifi_start_ap();
+        ESP_ERROR_CHECK(webconfig_start(&s_cfg, true));
+        for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 
     seq_init();
-    wifi_start(&s_cfg);
+    wifi_start_sta(&s_cfg);
+    webconfig_start(&s_cfg, false);  // LAN settings page (reconfigure without the card)
 
     netclock_start();
     ESP_LOGI(TAG, "waiting for NTP sync before capturing (clock is load-bearing)...");
@@ -165,6 +200,12 @@ void app_main(void) {
 
     ESP_ERROR_CHECK(spool_init(MOUNT_POINT "/spool", s_cfg.spool_max_files));
     ESP_ERROR_CHECK(publisher_start(&s_cfg));
+
+    if (s_cfg.presence_enabled) {
+        if (presence_init(s_cfg.presence_sensitivity, s_cfg.presence_hold_ms) != ESP_OK) {
+            ESP_LOGW(TAG, "presence init failed — continuing audio-only");
+        }
+    }
 
     ESP_ERROR_CHECK(audio_capture_init(CONFIG_UKNOMI_SAMPLE_RATE,
                                        CONFIG_UKNOMI_PDM_CLK_GPIO, CONFIG_UKNOMI_PDM_DIN_GPIO));

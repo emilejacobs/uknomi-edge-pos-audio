@@ -20,5 +20,10 @@
   "retain_audio": true,
   "spool": {
     "max_files": 500
+  },
+  "presence": {
+    "enabled": false,
+    "hold_ms": 30000,
+    "sensitivity": 8.0
   }
 }

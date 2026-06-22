@@ -10,8 +10,9 @@
 
 // Build one envelope into a freshly malloc'd buffer (caller frees). Returns NULL
 // on allocation failure. *out_len receives the total byte length.
+// `presence`: -1 to omit the field, else 0/1 (was a customer in frame).
 uint8_t *envelope_build(const char *store, const char *reg, uint32_t seq,
                         const char *start_utc, const char *end_utc,
                         int sample_rate, const char *codec, const char *vad,
-                        bool retain_audio, const int16_t *pcm, int n_samples,
-                        size_t *out_len);
+                        bool retain_audio, int presence,
+                        const int16_t *pcm, int n_samples, size_t *out_len);
