@@ -1,0 +1,41 @@
+# uKnomi aggregator config. Copy to aggregator.toml and edit.
+# Secrets can also come from env: UKNOMI_MQTT_PASSWORD, ANTHROPIC_API_KEY, AWS_*.
+
+# Fallback when an envelope omits retain_audio. Default OFF (transcript-only, prod).
+retain_audio_default = false
+
+[mqtt]
+host = "localhost"
+port = 1883
+# username = "uknomi"          # auth required on shared/store WiFi
+# password = "change-me"        # or set UKNOMI_MQTT_PASSWORD
+topic = "uknomi/+/+/segment"    # all stores/registers
+status_topic = "uknomi/+/+/status"  # device IP/health announcements -> data/devices.json
+client_id = "uknomi-aggregator"
+
+[storage]
+data_dir = "data"               # co-keyed audio + transcripts land here
+
+[transcribe]
+engine = "faster-whisper"       # "faster-whisper" | "whisper-cpp" | "none"
+model = "small.en"              # faster-whisper model, or model path for whisper-cpp
+language = "en"
+# whisper_cpp_bin = "/opt/uknomi/whisper/main"   # required when engine = "whisper-cpp"
+
+[ordersplit]
+provider = "anthropic"          # "anthropic" | "openai-compatible"
+model = "claude-opus-4-8"       # set "claude-sonnet-4-6" for cheaper high-volume runs
+effort = "medium"               # low | medium | high | max (anthropic only)
+max_chunk_chars = 8000
+overlap_chars = 600
+# --- local / OpenAI-compatible inference (LM Studio, Ollama, vLLM, OpenAI) ---
+# provider = "openai-compatible"
+# base_url = "http://localhost:1234/v1"   # LM Studio default
+# model = "qwen2.5-7b-instruct"           # the model id loaded in LM Studio
+# api_key = "lm-studio"                    # any string for LM Studio
+
+[s3]
+enabled = false
+# bucket = "uknomi-pos-audio"
+# region = "us-east-1"
+# prefix = "v1"
