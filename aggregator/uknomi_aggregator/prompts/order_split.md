@@ -34,6 +34,15 @@ A **close followed by a greeting** is the strongest boundary there is — far mo
 reliable than any silence threshold. Treat the pause markers and long gaps as
 **weak supporting hints only**, not as boundaries on their own.
 
+**Presence hint (when present).** Some lines carry a parenthetical from a camera
+at the counter: `(customer present)` or `(no customer at counter)`. Use it as a
+supporting signal, not ground truth: `(no customer at counter)` is evidence the
+speech is **not** an order (coworker chatter, a phone call, or neighbouring-
+register bleed) — lean toward dropping it; `(customer present)` supports a real
+order. The camera can miss a perfectly still customer, so never discard a clear
+ordering script on the hint alone. Do **not** copy the parenthetical into items
+or `source_utterances` — only the bracketed timestamp is the utterance id.
+
 ## Rules
 
 1. **Bias toward splitting.** When you are unsure whether two stretches are one

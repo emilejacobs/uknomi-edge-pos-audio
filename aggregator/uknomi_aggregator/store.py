@@ -37,6 +37,7 @@ class Record:
     json_path: Path
     audio_path: Path | None
     text: str | None
+    presence: bool | None = None  # camera presence, when enabled on the node
 
 
 class Store:
@@ -130,6 +131,7 @@ class Store:
                     json_path=json_path,
                     audio_path=(directory / audio_name) if audio_name else None,
                     text=data.get("text"),
+                    presence=data.get("presence"),
                 )
             )
         records.sort(key=lambda r: r.start_utc)

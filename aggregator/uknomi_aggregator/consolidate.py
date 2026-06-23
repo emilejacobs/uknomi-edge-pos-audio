@@ -45,7 +45,13 @@ def build_lines(records: Sequence[Record]) -> list[str]:
             gap = gap_seconds(prev_end, rec.start_utc)
             if gap >= PAUSE_MARKER_SECONDS:
                 lines.append(f"(— {round(gap)}s pause —)")
-        lines.append(f"[{rec.start_utc}] {rec.text.strip()}")
+        # Optional camera presence hint (parenthetical, never inside the [ts] id).
+        marker = ""
+        if rec.presence is True:
+            marker = "(customer present) "
+        elif rec.presence is False:
+            marker = "(no customer at counter) "
+        lines.append(f"[{rec.start_utc}] {marker}{rec.text.strip()}")
         prev_end = rec.end_utc
     return lines
 

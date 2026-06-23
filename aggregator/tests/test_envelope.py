@@ -76,6 +76,12 @@ def test_retain_audio_defaults_false_when_absent():
     assert seg.retain_audio is False
 
 
+def test_presence_is_none_when_absent_else_bool():
+    assert decode(encode(_header(), b"")).presence is None  # feature off -> omitted
+    assert decode(encode(_header(presence=True), b"")).presence is True
+    assert decode(encode(_header(presence=False), b"")).presence is False
+
+
 def test_header_is_deterministic_sorted_json():
     # Sorted keys keep the prefix stable (matters for the firmware mirror).
     body = encode(_header(), b"")

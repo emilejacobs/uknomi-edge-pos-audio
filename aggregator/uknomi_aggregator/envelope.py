@@ -78,6 +78,12 @@ class Segment:
         return bool(self.header.get("retain_audio", False))
 
     @property
+    def presence(self) -> bool | None:
+        """Camera presence during the utterance, or None when the feature is off."""
+        value = self.header.get("presence")
+        return None if value is None else bool(value)
+
+    @property
     def key(self) -> tuple[str, str, int]:
         """The idempotency key — ``(store, register, seq)`` (ARCHITECTURE §1)."""
         return (self.store, self.register, self.seq)

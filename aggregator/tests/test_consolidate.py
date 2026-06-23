@@ -4,11 +4,25 @@ from uknomi_aggregator.consolidate import build_lines, chunk_lines, consolidate,
 from uknomi_aggregator.store import Record
 
 
-def _rec(start, end, text):
+def _rec(start, end, text, presence=None):
     return Record(
         store="s", register="r", start_utc=start, end_utc=end, seq=0,
-        json_path=Path("x.json"), audio_path=None, text=text,
+        json_path=Path("x.json"), audio_path=None, text=text, presence=presence,
     )
+
+
+def test_presence_marker_only_when_known():
+    recs = [
+        _rec("2026-06-18T12:00:00.000Z", "2026-06-18T12:00:02.000Z", "a"),  # unknown
+        _rec("2026-06-18T12:00:03.000Z", "2026-06-18T12:00:05.000Z", "b", presence=True),
+        _rec("2026-06-18T12:00:06.000Z", "2026-06-18T12:00:08.000Z", "c", presence=False),
+    ]
+    lines = build_lines(recs)
+    assert lines[0] == "[2026-06-18T12:00:00.000Z] a"  # no marker when unknown
+    assert "(customer present)" in lines[1]
+    assert "(no customer at counter)" in lines[2]
+    # The bracketed id stays a bare timestamp (never polluted by the marker).
+    assert lines[1].startswith("[2026-06-18T12:00:03.000Z] ")
 
 
 def test_gap_seconds():
