@@ -3,7 +3,9 @@ name: ci
 on:
   push:
     branches: [main]
+    paths: ["aggregator/**", ".github/workflows/ci.yml"]
   pull_request:
+    paths: ["aggregator/**", ".github/workflows/ci.yml"]
 
 jobs:
   aggregator:
