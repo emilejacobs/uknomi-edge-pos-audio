@@ -1,0 +1,10 @@
+## Managed component dependencies (resolved by the IDF component manager at build).
+dependencies:
+  idf:
+    version: ">=5.2"
+  ## ESP-SR provides the AFE (audio front-end): single-mic noise suppression + VAD.
+  espressif/esp-sr:
+    version: "*"
+  ## OV2640 camera driver for optional presence detection.
+  espressif/esp32-camera:
+    version: "*"

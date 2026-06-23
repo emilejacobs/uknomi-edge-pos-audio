@@ -1,0 +1,31 @@
+idf_component_register(
+    SRCS
+        "app_main.c"
+        "config_sd.c"
+        "netclock.c"
+        "audio_capture.c"
+        "vad.c"
+        "segmenter.c"
+        "envelope.c"
+        "spool.c"
+        "publisher.c"
+        "camera.c"
+        "presence.c"
+        "webconfig.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        driver
+        esp_wifi
+        esp_netif
+        esp_event
+        esp_timer
+        esp_http_server
+        nvs_flash
+        mqtt
+        json
+        fatfs
+        sdmmc
+        lwip
+        esp-sr
+        esp32-camera
+)

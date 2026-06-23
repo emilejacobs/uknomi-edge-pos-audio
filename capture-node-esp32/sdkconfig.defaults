@@ -1,0 +1,27 @@
+# Build defaults for the XIAO ESP32-S3 Sense capture node.
+# Generated sdkconfig is gitignored; these defaults seed it.
+
+CONFIG_IDF_TARGET="esp32s3"
+
+# --- PSRAM (8 MB) — required for the ring/utterance buffers and ESP-SR AFE ---
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+
+# --- Flash (8 MB) ---
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="8MB"
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# --- CPU at full tilt for real-time audio + AFE ---
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_FREERTOS_HZ=1000
+
+# --- Main task stack headroom ---
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# --- Networking ---
+CONFIG_MQTT_TASK_STACK_SIZE=6144

@@ -67,8 +67,9 @@ The MQTT payload is a single binary blob:
   "end_utc":   "2026-06-18T12:03:18.512Z",
   "sample_rate": 16000,
   "codec": "pcm16",
-  "vad": "esp_sr_afe",
-  "retain_audio": true
+  "vad": "esp_sr_vad",
+  "retain_audio": true,
+  "presence": true
 }
 ```
 
@@ -77,6 +78,9 @@ The MQTT payload is a single binary blob:
 - `start_utc` / `end_utc` — ISO-8601 UTC, millisecond precision. **Load-bearing** (see §4).
 - `retain_audio` — node-local flag (from SD config) telling the aggregator whether to keep the audio.
 - `vad` — which VAD produced the boundary (provenance for failure analysis).
+- `presence` — **optional**. Present only when camera presence detection is enabled: was a
+  customer in front of the counter during this utterance (a secondary boundary/confidence signal
+  for order-splitting). Omitted entirely when the feature is off; the camera never sends frames.
 
 ---
 

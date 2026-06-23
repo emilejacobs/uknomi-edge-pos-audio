@@ -1,0 +1,45 @@
+name: firmware
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "capture-node-esp32/**"
+      - ".github/workflows/firmware.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build firmware (ESP-IDF)
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: release-v5.2
+          target: esp32s3
+          path: capture-node-esp32
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: uknomi-capture-firmware
+          path: |
+            capture-node-esp32/build/uknomi_capture.bin
+            capture-node-esp32/build/bootloader/bootloader.bin
+            capture-node-esp32/build/partition_table/partition-table.bin
+          if-no-files-found: warn
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: uknomi-capture-firmware
+          path: artifacts
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**
