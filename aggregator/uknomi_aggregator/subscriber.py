@@ -1,7 +1,7 @@
-"""MQTT ingest: subscribe to segment topics and hand raw payloads to a callback.
+"""MQTT ingest: subscribe to segment + status topics and route to a callback.
 
-Thin wrapper over paho-mqtt v2. The callback receives the raw envelope bytes;
-decoding/idempotency/processing live in the app so this stays testable and dumb.
+Thin wrapper over paho-mqtt v2. The callback receives ``(topic, payload)``;
+decoding/idempotency/routing live in the app so this stays testable and dumb.
 """
 
 from __future__ import annotations
@@ -15,11 +15,11 @@ from .config import MqttConfig
 
 log = logging.getLogger(__name__)
 
-PayloadHandler = Callable[[bytes], None]
+MessageHandler = Callable[[str, bytes], None]
 
 
 class MqttSubscriber:
-    def __init__(self, config: MqttConfig, handler: PayloadHandler) -> None:
+    def __init__(self, config: MqttConfig, handler: MessageHandler) -> None:
         self.config = config
         self.handler = handler
         self._client = mqtt.Client(
@@ -34,12 +34,13 @@ class MqttSubscriber:
         if reason_code != 0:
             log.error("MQTT connect failed: %s", reason_code)
             return
-        log.info("connected to broker; subscribing to %s", self.config.topic)
-        client.subscribe(self.config.topic, qos=1)
+        topics = [(self.config.topic, 1), (self.config.status_topic, 1)]
+        log.info("connected to broker; subscribing to %s", [t for t, _ in topics])
+        client.subscribe(topics)
 
     def _on_message(self, client, userdata, msg) -> None:
         try:
-            self.handler(msg.payload)
+            self.handler(msg.topic, msg.payload)
         except Exception:  # noqa: BLE001 - never let one bad message kill the loop
             log.exception("failed to handle message on %s", msg.topic)
 

@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import Config, load_config
+from .devices import DeviceRegistry, parse_status
 from .envelope import EnvelopeError, Segment, decode
 from .ordersplit import OrderSplitter
 from .s3 import S3Uploader, write_orders_local
@@ -48,8 +49,23 @@ class Ingestor:
         self.store = store
         self.transcriber = transcriber
         self.s3 = s3
+        self.devices = DeviceRegistry(config.storage.data_dir / "devices.json")
 
-    def handle_payload(self, payload: bytes) -> None:
+    def handle_message(self, topic: str, payload: bytes) -> None:
+        if topic.endswith("/status"):
+            self._handle_status(topic, payload)
+        else:
+            self._handle_segment(payload)
+
+    def _handle_status(self, topic: str, payload: bytes) -> None:
+        status = parse_status(topic, payload)
+        if status is None:
+            return
+        self.devices.update(status)
+        log.info("device %s online at %s (rssi %s, fw %s)",
+                 status.device, status.url, status.rssi, status.fw)
+
+    def _handle_segment(self, payload: bytes) -> None:
         try:
             segment = decode(payload)
         except EnvelopeError as exc:
@@ -78,7 +94,7 @@ def run_ingest(config: Config) -> None:
     transcriber = build_transcriber(config.transcribe)
     s3 = S3Uploader(config.s3)
     ingestor = Ingestor(config, store, transcriber, s3)
-    subscriber = MqttSubscriber(config.mqtt, ingestor.handle_payload)
+    subscriber = MqttSubscriber(config.mqtt, ingestor.handle_message)
     log.info("aggregator ingest starting (broker %s:%s)", config.mqtt.host, config.mqtt.port)
     subscriber.run_forever()
 

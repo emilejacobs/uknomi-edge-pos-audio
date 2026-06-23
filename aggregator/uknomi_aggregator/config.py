@@ -31,6 +31,7 @@ class MqttConfig:
     username: str | None = None
     password: str | None = None
     topic: str = "uknomi/+/+/segment"  # subscribe pattern: all stores/registers
+    status_topic: str = "uknomi/+/+/status"  # device IP/health announcements
     client_id: str = "uknomi-aggregator"
     keepalive: int = 60
 
@@ -102,6 +103,7 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
             username=mqtt_raw.get("username"),
             password=os.environ.get("UKNOMI_MQTT_PASSWORD", mqtt_raw.get("password")),
             topic=mqtt_raw.get("topic", MqttConfig.topic),
+            status_topic=mqtt_raw.get("status_topic", MqttConfig.status_topic),
             client_id=mqtt_raw.get("client_id", MqttConfig.client_id),
             keepalive=int(mqtt_raw.get("keepalive", MqttConfig.keepalive)),
         ),

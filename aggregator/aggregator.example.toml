@@ -10,6 +10,7 @@ port = 1883
 # username = "uknomi"          # auth required on shared/store WiFi
 # password = "change-me"        # or set UKNOMI_MQTT_PASSWORD
 topic = "uknomi/+/+/segment"    # all stores/registers
+status_topic = "uknomi/+/+/status"  # device IP/health announcements -> data/devices.json
 client_id = "uknomi-aggregator"
 
 [storage]
